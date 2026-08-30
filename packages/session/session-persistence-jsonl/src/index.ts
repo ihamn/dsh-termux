@@ -9,7 +9,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { readdirSync } from 'node:fs'
-import { open, mkdir, readFile, readdir, realpath, link, rm, stat, truncate } from 'node:fs/promises'
+import { open, mkdir, readFile, readdir, realpath, link, rename, rm, stat, truncate } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
@@ -563,6 +563,14 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     let linked = false
     try {
       await link(tmp, finalPath)
+      linked = true
+    } catch (error) {
+      // Android/Termux denies hardlink creation (EACCES/EPERM under f2fs +
+      // SELinux). rename() is equally atomic on this platform; the EEXIST
+      // race link() guards against cannot occur here because the temp name is
+      // unique and a duplicate id was already rejected above.
+      if (!(error instanceof Error && 'code' in error && (error.code === 'EACCES' || error.code === 'EPERM'))) throw error
+      await rename(tmp, finalPath)
       linked = true
     } finally {
       // Remove an unpublished temp on failure. After publication, defer cleanup

@@ -2,7 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { chmod, link, mkdir, open, readFile, unlink } from 'node:fs/promises'
+import { chmod, link, mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import { dirname, join, parse, resolve } from 'node:path'
 import {
   AttachmentError,
@@ -214,17 +214,28 @@ export async function commitPreparedImageFile(
     await handle.sync()
     await handle.close()
     handle = undefined
+    let moved = false
     try {
       await link(temporary, target)
     } catch (error) {
       /* v8 ignore next -- Private same-filesystem directories make EEXIST the only recoverable link race. */
-      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
-      const existing = new Uint8Array(await readFile(target))
-      if (digest(existing) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+      if (!(error instanceof Error && 'code' in error)) throw error
+      if (error.code === 'EEXIST') {
+        const existing = new Uint8Array(await readFile(target))
+        if (digest(existing) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+      } else if (error.code === 'EACCES' || error.code === 'EPERM') {
+        // Android/Termux denies hardlink creation (f2fs + SELinux); rename is
+        // atomic here and the staging path is consumed by the move.
+        await rename(temporary, target)
+        moved = true
+      } else {
+        throw error
+      }
     }
     // Windows shares the read-only attribute across hard links and refuses to
-    // unlink either name once it is set, so discard the staging name first.
-    await unlink(temporary)
+    // unlink either name once it is set, so discard the staging name first
+    // (skipped when Android's rename() already consumed it).
+    if (!moved) await unlink(temporary)
     // The target remains the sole link for a new object; this also restores
     // read-only mode when the deduplication path observes an existing object.
     await chmod(target, 0o400)
