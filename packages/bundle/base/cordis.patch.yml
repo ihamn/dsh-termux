@@ -271,6 +271,9 @@
       config:
         sampleOverCapGlobResults: false
 
+    - id: tool-plugin-market
+      name: '@deepseek-ai/dsh-tool-plugin-market'
+
     - id: agent-instructions
       name: '@deepseek-ai/dsh-agent-instructions'
       config:

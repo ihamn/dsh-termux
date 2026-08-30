@@ -327,6 +327,19 @@ node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-merm
 > 已装插件可在 **设置 → 插件** 查看/启停；插件市场内可直接搜索更多社区插件
 > （官方生态站点 dsh-plugin.org）。注意插件由第三方维护，安装前请自行确认来源可信。
 
+### 5.7 让 AI 自己管理插件（可选）
+
+本分支新增了 `plugin-market` 工具：agent 可以直接**搜索 / 查看 / 安装 / 卸载**插件，
+不用你手动敲命令。直接在对话里说：
+
+```text
+帮我搜一下语音相关的插件
+帮我装 dsh-chatvoice
+看看现在装了哪些插件
+```
+
+工具内部复用 `dsh plugin --profile web` 命令，安装/卸载后需要重启 dsh web 生效。
+
 ---
 
 ## 6. 本分支包含的适配改动
@@ -344,6 +357,7 @@ node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-merm
 | `packages/client/ui-conversation/.../input/editor/keymap.ts` | 触屏设备上普通回车=换行，Ctrl/Cmd+Enter=发送 | 安卓输入法回车误触发发送 |
 | `packages/client/connection/src/browser-auth.ts` | loopback 来源跳过浏览器会话 token 鉴权 | 恢复"直接打开 127.0.0.1:3080"的老体验；非 loopback（trusted-host）仍需 token |
 | `packages/preset/agent-presets/src/index.ts` | 旧预设名 `code` 作为 `ptc` 的兼容别名 | 官方在 0.1.1+ 把 `code` 改名为 `ptc`，老会话/老 settings 仍存 `code`，直接升级会 resume 失败 |
+| `packages/extensions/tool-plugin-market/` | 新增 `plugin-market` 工具（search/list/info/install/remove） | 让 agent 自己搜索、安装、卸载插件，无需手动敲 CLI |
 | `docs/termux/README.md` | 本文档 | 适配说明 |
 | `docs/termux/setup-termux.sh` | 一键环境配置脚本 | 自动完成安装/编译/构建 |
 | `docs/termux/koffi-android.patch` | koffi bionic 编译补丁 | 见 §3.1 |
