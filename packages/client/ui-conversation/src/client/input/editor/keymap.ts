@@ -121,10 +121,15 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
         event?.preventDefault()
         return true
       }
+      const accelerated = event?.ctrlKey === true || event?.metaKey === true
+      // Android/Termux mobile keyboards: a bare Enter inserts a line break
+      // (falls through to Lexical's default newline), Ctrl/Cmd+Enter sends.
+      // Desktop keeps Enter-to-submit since it has no touch keyboard.
+      if (!accelerated && navigator.maxTouchPoints > 0) return false
       event?.preventDefault()
       if (event?.repeat === true) return true // held-down Enter must not machine-gun sends
       if (!handlers.canSubmit()) return true
-      handlers.submit(event?.ctrlKey === true || event?.metaKey === true)
+      handlers.submit(accelerated)
       return true
     }, COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(PASTE_COMMAND, (event) => {
