@@ -1,63 +1,48 @@
-# DeepSeek Harness
+# DeepSeek Harness — Termux 社区适配版
 
-English | [中文](README.zh.md)
+> ⚠️ **本仓库是社区适配分支，不是 DeepSeek 官方项目。**
+>
+> 本分支基于 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)
+> （MIT 开源协议）的 `0.1.2-alpha.1`，面向 **Termux (Android)** 做了移动端网页界面
+> 适配与 Android 兼容性修复，**与 DeepSeek 官方无任何关联，未获其授权或背书**；
+> "DeepSeek"、"DeepSeek Harness" 等名称与商标归其各自所有者所有。
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+---
 
-It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
+## 这是什么
 
-Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+DeepSeek Harness（`dsh`）官方开源 Agent Harness 的 **Termux 社区适配版**，包含：
 
-## Developer preview
+- 📱 **移动端网页界面适配**：抽屉式侧栏/详情面板、全宽聊天、统计行换行等；
+- 🔧 **Android 兼容性修复**：f2fs 硬链接（link→rename 回退）、subprocess 平台识别、
+  bionic 原生模块编译、pnpm 9 安装链路、ripgrep 桥接；
+- 🚀 **一键环境配置**：`bash docs/termux/setup-termux.sh`。
 
-DeepSeek Harness is in _developer preview_ and iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
+**📖 安装与使用指南**：[docs/termux/README.md](docs/termux/README.md)
 
-Review the [safety notice](SAFETY.md) before running the project.
-
-## Run
-
-### Run from `npm`
-
-Install `Node.js`, then run:
-
-```sh
-npx @deepseek-ai/dsh web
-```
-
-The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it in the default browser for a local launch. An SSH launch only prints the host URL because the SSH client or editor owns the local forwarded address. Pass `--no-open` to run the server without opening a browser. See [Web UI guide](docs/user/guide/index.md).
-
-### Run from source
-
-To run from a repository checkout:
+## 快速开始（Termux）
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
-pnpm install
-pnpm run build
-pnpm dsh web
+pkg install -y git
+git clone https://gitee.com/ihamn/dsh-termux.git
+cd dsh-termux
+bash docs/termux/setup-termux.sh
 ```
 
-`pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
+启动并打开网页版：
 
-## Community and support
+```sh
+bash docs/termux/start-dsh-web.sh --bg
+# 手机浏览器打开 http://127.0.0.1:3080
+```
 
-- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
-- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/Ycq5dCaS4">DeepSeek Harness Discord community</a>.
+> 没有 git 也可以在仓库页下载 ZIP 解压后执行同一脚本；详细说明见
+> [docs/termux/README.md](docs/termux/README.md)。
 
-## Contributing
+## 本分支改动
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+完整改动清单见 [docs/termux/README.md §6](docs/termux/README.md#6-本分支包含的适配改动)。
 
-## Development
+## 许可
 
-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
-
-For agents, follow [AGENTS.md](AGENTS.md).
-
-## License
-
-[MIT](LICENSE)
-
-Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE)，保留上游 DeepSeek 版权声明，并追加本分支的版权行。
