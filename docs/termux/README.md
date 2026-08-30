@@ -311,6 +311,22 @@ echo "OPENAI_API_KEY=sk-xxxx" >> .env
 echo "OPENROUTER_API_KEY=sk-xxxx" >> .env
 ```
 
+### 5.6 插件与插件市场（可选）
+
+harness 的插件装在 web profile 里（`~/.dsh/profiles/web`），装完**重启 dsh web** 生效：
+
+```bash
+# 可视化插件市场（设置 → 插件 → 插件市场，浏览/搜索/一键安装社区插件）
+node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dshmarket
+
+# 实用插件示例
+node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-chatvoice      # 语音输入 + 回复朗读（免费，浏览器原生）
+node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-mermaid-render # 对话内 Mermaid 图表渲染（离线引擎）
+```
+
+> 已装插件可在 **设置 → 插件** 查看/启停；插件市场内可直接搜索更多社区插件
+> （官方生态站点 dsh-plugin.org）。注意插件由第三方维护，安装前请自行确认来源可信。
+
 ---
 
 ## 6. 本分支包含的适配改动
@@ -326,6 +342,7 @@ echo "OPENROUTER_API_KEY=sk-xxxx" >> .env
 | `packages/client/ui-conversation/.../skeleton/ConversationRoot.tsx` / `.module.css` | 会话标题在手机端避让菜单按钮 | 标题被悬浮按钮遮挡 |
 | `packages/client/ui-chat/.../chat/StatsLine.module.css` | 手机端统计行换行显示 | 缓存命中率等被省略号截断（新版已移到 ui-chat 包） |
 | `packages/client/ui-conversation/.../input/editor/keymap.ts` | 触屏设备上普通回车=换行，Ctrl/Cmd+Enter=发送 | 安卓输入法回车误触发发送 |
+| `packages/client/connection/src/browser-auth.ts` | loopback 来源跳过浏览器会话 token 鉴权 | 恢复"直接打开 127.0.0.1:3080"的老体验；非 loopback（trusted-host）仍需 token |
 | `docs/termux/README.md` | 本文档 | 适配说明 |
 | `docs/termux/setup-termux.sh` | 一键环境配置脚本 | 自动完成安装/编译/构建 |
 | `docs/termux/koffi-android.patch` | koffi bionic 编译补丁 | 见 §3.1 |
