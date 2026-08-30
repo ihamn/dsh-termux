@@ -34,6 +34,19 @@
   --dsh-composer-dock-inset: 8px;
 }
 
+/* Seat for the session header row; on phones it clears the floating menu
+   button (top-left) so the conversation name is not covered. */
+.headerSeat {
+  flex: none;
+}
+
+@media (max-width: 768px) {
+  .headerSeat {
+    padding-left: 56px;
+    padding-right: 8px;
+  }
+}
+
 .header {
   position: relative;
   /* Above the width handles (which start at top: 0) so the breadcrumb row and

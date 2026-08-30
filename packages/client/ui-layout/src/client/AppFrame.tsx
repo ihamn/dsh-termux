@@ -145,11 +145,15 @@ export function AppFrame({
   // absorbs the squeeze.
   const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
   useEffect(() => { actions.setNarrow(narrow) }, [actions, narrow])
+  // Termux / mobile: under 768px the conversation takes the full frame and the
+  // sidebar opens as an overlay drawer (AppFrame.module.css).
+  const mobile = viewport <= 768
   const sidebarCollapsed = narrow ? !panels.narrowExpanded : panels.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
   const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
+  const mobileDetailsOpen = mobile && detailsSession !== undefined && panels.details > 0
   const colsRef = useRef(cols)
   colsRef.current = cols
 
@@ -179,6 +183,9 @@ export function AppFrame({
       style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-details-collapsed={cols.details === 0 || undefined}
+      data-mobile-drawer={mobile || undefined}
+      data-mobile-sidebar-open={mobile && !sidebarCollapsed || undefined}
+      data-mobile-details-open={mobileDetailsOpen || undefined}
       data-dragging={dragging || undefined}
     >
       <DocumentTitle
@@ -210,6 +217,11 @@ export function AppFrame({
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}
       </div>
+      {mobile && <div className={css.mobileBackdrop} onClick={actions.toggleSidebar} aria-hidden />}
+      {mobile && <div className={css.mobileDetailsBackdrop} onClick={actions.closeDetails} aria-hidden />}
+      {mobile && (
+        <button type="button" className={css.menuButton} onClick={actions.toggleSidebar} aria-label="打开侧栏">☰</button>
+      )}
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
       {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
       {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
