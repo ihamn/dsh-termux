@@ -8,6 +8,7 @@ import type {
   ConnectionIndexResponse,
   ConnectionTrustRequest,
 } from './rpc.ts'
+import { isLoopbackHostname } from './loopback-hostname.ts'
 
 const AUTH_RECORD_KEY = credentialKey('client-connection', 'browser-session')
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1000
@@ -238,6 +239,10 @@ export class BrowserAuth {
    * @returns true only when the caller may serve index.html.
    */
   authorizeIndex(req: ConnectionIndexRequest, res: ConnectionIndexResponse): boolean {
+    // Termux fork: loopback authorities skip the launch-token exchange — the
+    // server binds 127.0.0.1 only and the /api Host fence already rejects
+    // non-loopback/trusted origins, restoring the classic no-auth local UX.
+    if (this.isLoopbackRequest(req)) return true
     /* v8 ignore next -- node:http always supplies url on server requests. */
     const url = new URL(req.url ?? '/', 'http://dsh.invalid')
     const tokens = url.searchParams.getAll(TOKEN_QUERY)
@@ -287,6 +292,8 @@ export class BrowserAuth {
    * @returns true only for an unexpired cookie signed by this activation's loaded secret.
    */
   isAuthenticated(request: ConnectionTrustRequest): boolean {
+    // Termux fork: same loopback exemption as authorizeIndex.
+    if (this.isLoopbackRequest(request)) return true
     const authority = requestAuthority(request.headers)
     const rawCookie = header(request.headers, 'cookie')
     if (authority === undefined || rawCookie === undefined) return false
@@ -299,6 +306,17 @@ export class BrowserAuth {
       && payload.expiresAt > now
       && payload.expiresAt > payload.issuedAt
       && payload.expiresAt - payload.issuedAt <= this.maxAgeMilliseconds
+  }
+
+  /** Whether the request's Host header names a loopback authority. */
+  private isLoopbackRequest(request: ConnectionTrustRequest): boolean {
+    const authority = requestAuthority(request.headers)
+    if (authority === undefined) return false
+    try {
+      return isLoopbackHostname(new URL(`http://${authority}`).hostname)
+    } catch {
+      return false
+    }
   }
 
   private writeUnauthorized(req: ConnectionIndexRequest, res: ConnectionIndexResponse): void {
