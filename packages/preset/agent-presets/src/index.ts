@@ -342,8 +342,12 @@ export class AgentPresets extends TypertRemoteService {
    */
   async resolve(id?: string): Promise<AgentPreset> {
     const wanted = id ?? this.defaultId
+    // Termux fork: upstream renamed the "code" preset to "ptc" in 0.1.1+.
+    // Sessions and settings written by earlier versions still say "code";
+    // resolve the legacy id as an alias so upgrades resume cleanly.
+    const normalized = wanted === 'code' ? 'ptc' : wanted
     const presets = await this.list()
-    const found = presets.find(preset => preset.id === wanted)
+    const found = presets.find(preset => preset.id === normalized)
     if (found === undefined) {
       throw new UnknownPresetError(wanted, presets.map(preset => preset.id))
     }

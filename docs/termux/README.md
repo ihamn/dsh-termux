@@ -343,6 +343,7 @@ node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-merm
 | `packages/client/ui-chat/.../chat/StatsLine.module.css` | 手机端统计行换行显示 | 缓存命中率等被省略号截断（新版已移到 ui-chat 包） |
 | `packages/client/ui-conversation/.../input/editor/keymap.ts` | 触屏设备上普通回车=换行，Ctrl/Cmd+Enter=发送 | 安卓输入法回车误触发发送 |
 | `packages/client/connection/src/browser-auth.ts` | loopback 来源跳过浏览器会话 token 鉴权 | 恢复"直接打开 127.0.0.1:3080"的老体验；非 loopback（trusted-host）仍需 token |
+| `packages/preset/agent-presets/src/index.ts` | 旧预设名 `code` 作为 `ptc` 的兼容别名 | 官方在 0.1.1+ 把 `code` 改名为 `ptc`，老会话/老 settings 仍存 `code`，直接升级会 resume 失败 |
 | `docs/termux/README.md` | 本文档 | 适配说明 |
 | `docs/termux/setup-termux.sh` | 一键环境配置脚本 | 自动完成安装/编译/构建 |
 | `docs/termux/koffi-android.patch` | koffi bionic 编译补丁 | 见 §3.1 |
