@@ -214,10 +214,14 @@ node --expose-internals apps/cli/lib/bin.js --profile web
 启动成功后输出：
 
 ```text
-dsh web: http://127.0.0.1:3080
+dsh web: http://127.0.0.1:3080/?token=...
 ```
 
-手机浏览器打开 `http://127.0.0.1:3080` 即可使用。
+> **新版默认启用 token 鉴权**：每次启动服务会生成一个新的随机 token（打印在
+> 上方地址里）。手机浏览器打开**带 token 的完整地址**即可，浏览器会拿到一个
+> 约 30 天有效的签名 cookie，之后直接访问 `http://127.0.0.1:3080/` 即可；
+> 若看到 "authentication required"，说明访问了不带 token 的地址或服务已重启，
+> 重新打开最新启动日志里的完整地址即可。
 
 ### 5.1 为什么是 danger-full-access
 
@@ -248,6 +252,9 @@ bash docs/termux/start-dsh-web.sh            # 前台运行
 bash docs/termux/start-dsh-web.sh --bg       # 后台运行 + wake-lock（息屏不冻），日志 ~/dsh-web.log
 bash docs/termux/start-dsh-web.sh -- --host 0.0.0.0   # 局域网访问（打印手机 IP）
 ```
+
+`--bg` 模式会轮询日志并**打印带 token 的完整访问地址**（token 每次重启都会变，
+以本次打印为准）。
 
 停止后台服务：
 

@@ -26,14 +26,22 @@ if [ "$1" = "--bg" ]; then
   else
     nohup node --expose-internals apps/cli/lib/bin.js --profile web "$@" > ~/dsh-web.log 2>&1 < /dev/null &
   fi
-  sleep 2
-  echo "dsh web 已在后台启动 （日志: ~/dsh-web.log）"
-  # 新版默认启用 token 鉴权；从日志中提取带 token 的访问地址
-  TOKEN_URL="$(grep -m1 -o 'http://127.0.0.1:3080/?token=[A-Za-z0-9_-]*' ~/dsh-web.log 2>/dev/null || true)"
+  echo "dsh web 正在后台启动 （日志: ~/dsh-web.log）"
+  # 新版默认启用 token 鉴权；轮询日志直到服务打印出带 token 的访问地址
+  # （服务冷启动约需数秒，一次 2 秒 sleep 经常抓不到）
+  TOKEN_URL=""
+  i=0
+  while [ "$i" -lt 30 ]; do
+    TOKEN_URL="$(grep -m1 -o 'http://127.0.0.1:3080/?token=[A-Za-z0-9_-]*' ~/dsh-web.log 2>/dev/null || true)"
+    [ -n "$TOKEN_URL" ] && break
+    sleep 1
+    i=$((i + 1))
+  done
   if [ -n "$TOKEN_URL" ]; then
     echo "访问地址: $TOKEN_URL"
+    echo "提示: 首次打开后浏览器会记住授权（约 30 天）；服务重启后 token 会变，请重新打开上面地址。"
   else
-    echo "访问地址: http://127.0.0.1:3080 （若要求 token，请查看 ~/dsh-web.log）"
+    echo "访问地址: http://127.0.0.1:3080 （若要求 token，请查看 ~/dsh-web.log 中的访问地址）"
   fi
   echo "停止: pkill -f '^node --expose-internals apps/cli/lib/bin.js'"
   exit 0
