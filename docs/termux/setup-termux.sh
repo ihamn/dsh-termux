@@ -25,6 +25,7 @@ echo "      （官方 v9 锁文件，无需改写）"
 echo "   4. 源码编译 koffi / node-pty 等原生模块"
 echo "   5. 配置 ripgrep 桥接与 sharp WebAssembly 运行时"
 echo "   6. 构建服务端、客户端插件与网页前端"
+echo "   7. 编译安卓原生沙箱 runner（read-only / workspace-write 拦截）"
 echo "------------------------------------------------------------"
 echo " 预计额外占用约 2GB 存储，耗时 15-30 分钟，需要网络。"
 echo " 参考环境：Termux v0.119.0-beta.3 / Android 14 / aarch64"
@@ -32,8 +33,9 @@ echo "------------------------------------------------------------"
 echo " 权限与风险确认："
 echo "   1. 本脚本会【全局安装】pnpm 9.15.9（npm install -g），"
 echo "      影响 Termux 的全局 Node 环境；"
-echo "   2. 项目运行时以 danger-full-access（无沙箱）模式运行，"
-echo "      agent 可读写 Termux 权限范围内的文件，请仅在需要时启动；"
+echo "   2. 脚本会编译并接线一个安卓原生沙箱 runner（docs/termux/sandbox），"
+echo "      默认以 workspace-write + 审批运行；未装 runner 时退回"
+echo "      danger-full-access（无沙箱），agent 可读写 Termux 权限范围内的文件；"
 echo "   3. 安装过程中会询问是否授予手机共享存储访问权限"
 echo "      （/storage/emulated/0，将弹出系统授权窗口）；"
 echo "   4. 本项目为社区适配分支，与 DeepSeek 官方无任何关联。"
@@ -62,10 +64,10 @@ case "$STORAGE_CONFIRM" in
 esac
 echo
 
-echo "==> [1/8] 安装 Termux 基础工具链"
+echo "==> [1/9] 安装 Termux 基础工具链"
 pkg install -y nodejs-lts cmake make clang binutils ndk-sysroot python ripgrep git patch
 
-echo "==> [2/8] 安装 pnpm 9.15.9（pnpm 10/11 在 Android 上有二进制校验问题）"
+echo "==> [2/9] 安装 pnpm 9.15.9（pnpm 10/11 在 Android 上有二进制校验问题）"
 if command -v pnpm >/dev/null 2>&1 && [ "$(pnpm --version 2>/dev/null | cut -d. -f1)" = "9" ]; then
   echo "pnpm 9 已就绪: $(pnpm --version)"
 else
@@ -77,10 +79,10 @@ else
   npm install -g pnpm@9.15.9 --registry="$NPM_REGISTRY"
 fi
 
-echo "==> [3/8] 安装依赖（锁文件会被 pnpm 9 本地规范化，属本地改动，请勿提交）"
+echo "==> [3/9] 安装依赖（锁文件会被 pnpm 9 本地规范化，属本地改动，请勿提交）"
 pnpm install --registry="${NPM_REGISTRY:-https://registry.npmjs.org}"
 
-echo "==> [4/8] 编译 koffi（应用 Android bionic 补丁）"
+echo "==> [4/9] 编译 koffi（应用 Android bionic 补丁）"
 KOFFI_DIR="$(echo node_modules/.pnpm/koffi@*/node_modules/koffi | awk '{print $1}')"
 if [ -d "$KOFFI_DIR" ]; then
   (cd "$KOFFI_DIR" && patch -N -p1 < "$ROOT/docs/termux/koffi-android.patch" || true)
@@ -89,7 +91,7 @@ else
   echo "警告: 未找到 koffi 包目录，跳过"
 fi
 
-echo "==> [5/8] 编译 node-pty（使用 Termux 本地头文件，避免 nodejs.org 下载）"
+echo "==> [5/9] 编译 node-pty（使用 Termux 本地头文件，避免 nodejs.org 下载）"
 NODE_PTY_DIR="$(echo node_modules/.pnpm/node-pty@*/node_modules/node-pty | awk '{print $1}')"
 if [ -d "$NODE_PTY_DIR" ]; then
   (cd "$NODE_PTY_DIR" && node "$(npm root -g)/npm/node_modules/node-gyp/bin/node-gyp.js" rebuild --nodedir="$PREFIX")
@@ -99,11 +101,11 @@ else
   echo "警告: 未找到 node-pty 包目录，跳过"
 fi
 
-echo "==> [6/8] 安装 ripgrep 桥接（glob/grep 工具）"
+echo "==> [6/9] 安装 ripgrep 桥接（glob/grep 工具）"
 mkdir -p node_modules/@vscode/ripgrep
 cp docs/termux/ripgrep-bridge/package.json docs/termux/ripgrep-bridge/index.js node_modules/@vscode/ripgrep/
 
-echo "==> [7/8] 安装 sharp WebAssembly 运行时"
+echo "==> [7/9] 安装 sharp WebAssembly 运行时"
 if [ ! -d node_modules/@img/sharp-wasm32 ]; then
   echo "sharp-wasm32 未随 pnpm install 就位，手动安装..."
   TMP="$(mktemp -d)"
@@ -118,7 +120,14 @@ else
   echo "sharp-wasm32 已就绪"
 fi
 
-echo "==> [8/8] 构建（服务端 + 客户端插件 + 网页前端）"
+echo "==> [8/9] 编译安卓原生沙箱 runner（read-only / workspace-write 拦截）"
+if command -v clang >/dev/null 2>&1; then
+  bash docs/termux/sandbox/install.sh web || echo "警告: 沙箱 runner 安装失败，稍后可重跑 docs/termux/sandbox/install.sh"
+else
+  echo "警告: 未找到 clang，跳过沙箱 runner"
+fi
+
+echo "==> [9/9] 构建（服务端 + 客户端插件 + 网页前端）"
 pnpm run build:lib:host
 pnpm run build:lib:client
 pnpm --filter @deepseek-ai/dsh-web-frontend run build

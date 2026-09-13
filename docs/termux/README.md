@@ -189,6 +189,24 @@ harness 的插件加载器需要访问 Node 内部模块解析器，依赖
 `node-addon-require-builtin`（无 android 预编译）。Node 自带
 `--expose-internals` 可提供同样能力，**运行时必须携带该参数**（见 §5）。
 
+### 3.6 安卓原生沙箱 runner（read-only / workspace-write）
+
+harness 自带的两个 Linux 后端在 Android 上都不可用：`bwrap` 需要非特权 user
+namespace（本机 `unshare --user` 直接 `Invalid argument`），Landlock 需要
+Linux ≥ 5.13 且内核编译时开启（本机为 5.10）。因此上游组合里受限模式会
+fail-closed 报 `SANDBOX_UNAVAILABLE`。
+
+本分支补了一个约 16KB 的原生 runner（无 VM / 无容器 / 无 root / 无常驻进程）：
+用 seccomp `SECCOMP_RET_USER_NOTIF` 只拦写入类系统调用，监督进程按路径判定
+`allow` / `EACCES`。安装：
+
+```bash
+bash docs/termux/sandbox/install.sh          # 编译并接线到 web profile
+```
+
+设计与限制见 [sandbox/README.md](sandbox/README.md)（合作式边界、无 PID/网络
+隔离、`/tmp` 映射到 `$TMPDIR` 等）。`setup-termux.sh` 已包含这一步。
+
 ---
 
 ## 4. 构建
@@ -207,8 +225,16 @@ pnpm --filter @deepseek-ai/dsh-web-frontend run build   # 网页前端（约 10 
 
 ```bash
 export DEEPSEEK_API_KEY=sk-xxx
-export DSH_PERMISSION_MODE=danger-full-access   # Termux 无沙箱后端，必须不设防
 node --expose-internals apps/cli/lib/bin.js --profile web
+```
+
+装上 §3.6 的沙箱 runner 后，默认档位是 `workspace-write` + 审批：只有会话工作区
+与 `$TMPDIR` 可写，越界写入会被拒绝，模型可以就同一条命令申请一次更宽权限，
+网页端弹审批（与电脑端一致）。没装 runner 时 `start-dsh-web.sh` 会退回
+`danger-full-access` 并给出提示。想强制某档：
+
+```bash
+DSH_PERMISSION_MODE=read-only bash docs/termux/start-dsh-web.sh
 ```
 
 启动成功后输出：
@@ -223,17 +249,31 @@ dsh web: http://127.0.0.1:3080
 > 请求，信任边界与旧版一致）。手机浏览器直接打开 `http://127.0.0.1:3080/` 即可。
 > 若后续通过 `--trusted-host` 开放局域网访问，非 loopback 来源仍需 token。
 
-### 5.1 为什么是 danger-full-access
+### 5.1 三种权限模式与安卓原生沙箱
 
-Termux 上没有可用的沙箱后端（bwrap / Landlock / macOS sandbox-exec / Windows ACL
-均不可用）。受限模式（`read-only` / `workspace-write`）会直接报错：
+没有 runner 时，受限模式会 fail-closed 报错：
 
 ```text
 sandbox mode "workspace-write" is requested but no sandbox backend is usable on this host
 ```
 
-因此必须使用 `danger-full-access`（agent 可读写 Termux 权限范围内的文件）。
-仅在需要时启动服务、用完关闭，是控制风险最直接的方式。
+装上 §3.6 的 runner 之后，网页端权限选择器里的三档都可用，行为与电脑端一致：
+
+| 档位 | 效果 |
+| --- | --- |
+| `read-only` | 除设备节点与 `/proc/self/*` 外全部只读；写、`chmod`、`rename`、`ptrace`、`mount` 等一律 `EACCES` |
+| `workspace-write` | 额外允许会话工作区与 `$TMPDIR` 写入（默认档） |
+| `danger-full-access` | 不经过 runner 的原生放行，审批策略为 `never`；需要完全放行时用这一档 |
+
+被拒绝的命令会带 `[sandbox: file access denied under <mode> mode]`，模型可在同一轮次
+申请一次更宽模式并附理由，网页端弹审批——这就是电脑端那套「拒绝→升权」的流程。
+`danger-full-access` 下 agent 仍可读写 Termux 权限范围内的文件，仅在需要时启动、
+用完关闭依旧是最直接的风控手段。
+
+边界说明：沙箱约束的是 Termux 进程族的文件效果。通过 IPC/Binder 委托给其它应用或
+系统服务执行的操作发生在沙箱之外，不在其管辖范围内（那类通道有自己的授权机制）；
+需要这类用法时请切到 `danger-full-access`。细节见
+[sandbox/README.md](sandbox/README.md)。
 
 ### 5.2 配置 API Key 的三种方式
 
@@ -248,9 +288,14 @@ sandbox mode "workspace-write" is requested but no sandbox backend is usable on 
 仓库提供 `docs/termux/start-dsh-web.sh`（Termux 版）：
 
 ```bash
-bash docs/termux/start-dsh-web.sh            # 前台运行
-bash docs/termux/start-dsh-web.sh --bg       # 后台运行 + wake-lock（息屏不冻），日志 ~/dsh-web.log
+pwd; ls -la                                  # 先确认当前目录与脚本都在（家目录下应有 start-dsh-web.sh 副本）
+bash start-dsh-web.sh --bg                   # 后台运行 + wake-lock（息屏不冻），日志 ~/dsh-web.log
+bash docs/termux/start-dsh-web.sh            # 或在仓库里跑这个，前台运行
 ```
+
+> 启动脚本会把工作目录切到仓库根，`process.cwd()` 就是新会话的默认工作区
+> （也是 `workspace-write` 允许写入的根）。想让别的目录成为工作区，就在那个目录下
+> 直接跑 `node --expose-internals <仓库>/apps/cli/lib/bin.js --profile web`。
 
 > 新版 CLI 已拒绝 `--host 0.0.0.0`（安全原因），如需局域网访问请改用
 > `--trusted-host <手机IP>` 并在系统防火墙放行端口（token 仍会生效）。
@@ -363,6 +408,7 @@ node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-merm
 | `docs/termux/koffi-android.patch` | koffi bionic 编译补丁 | 见 §3.1 |
 | `docs/termux/ripgrep-bridge/` | rg 桥接模块（2 文件） | 见 §3.3 |
 | `docs/termux/start-dsh-web.sh` | 一键启动脚本 | 见 §5.2 |
+| `docs/termux/sandbox/` | 安卓原生沙箱 runner（C 源码 + 安装/自检脚本 + 说明） | 上游 `bwrap`/Landlock 在 Android 不可用，补上 `read-only`/`workspace-write`；**不修改任何上游源码**，见 §3.6 |
 
 ### 移动端界面说明
 
@@ -381,6 +427,10 @@ node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-merm
   位置调整），内容等价——**这是本地改动，请勿提交**，与官方保持同步；
 - 从上游拉取更新时，冲突只会出现在本分支改动的少数文件上；
   koffi 补丁、ripgrep 桥接等位于 `node_modules`（不入库），升级后按 §3 重新应用即可。
+- **跟随官方更新是安全的**：§3.6 的沙箱全部位于 `docs/termux/`（上游仓库没有这个
+  目录），且只通过用户 profile 的配置补丁（`runnerCommand`）接入，没有改动任何
+  harness 源码或上游接口。合入上游更新后 `docs/termux/**` 原样保留，必要时重跑一次
+  `bash docs/termux/sandbox/install.sh` 即可（它会重新编译并保持接线幂等）。
 
 ---
 
