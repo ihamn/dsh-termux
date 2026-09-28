@@ -1,7 +1,7 @@
-# DeepSeek Harness 0.1.2-alpha.1 — Termux (Android ARM64) 适配说明
+# DeepSeek Harness 0.2.0-rc.1 — Termux (Android ARM64) 适配说明
 
 本文档记录本分支在 Termux（Android / aarch64）上从源码构建、运行和日常使用的完整方法。
-本分支基于 DeepSeek Harness `0.1.2-alpha.1`（官方 master，2026-08-30 同步），包含移动端
+本分支基于 DeepSeek Harness `0.2.0-rc.1`（官方 master，2026-09-28 同步），包含移动端
 网页界面适配与 Android 兼容性修复，
 所有改动均可在 `git diff` 中逐文件审阅。
 
@@ -42,7 +42,7 @@
 | python | 3.14.6 |
 | ripgrep | 15.2.0 |
 | npm 镜像 | registry.npmmirror.com |
-| 适配时间 | 2026-08-13 ~ 08-14（初版 rc.5）；2026-08-30（升级 0.1.2-alpha.1） |
+| 适配时间 | 2026-08-13 ~ 08-14（初版 rc.5）；2026-08-30（0.1.2-alpha.1）；2026-09-28（0.2.0-rc.1） |
 
 安装基础工具链：
 
@@ -149,9 +149,10 @@ cd node_modules/.pnpm/node-pty@1.2.0-beta.15/node_modules/node-pty
 node $(npm root -g)/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --nodedir=$PREFIX
 ```
 
-> 官方锁文件已为 node-pty 自带 `patchedDependencies`（spawn-helper 路径补丁），
-> pnpm 9 安装时自动应用；编译后 `build/Release/spawn-helper` 需可执行
-> （`chmod +x`，见 §4 构建前）。
+> pnpm 9 不从 `pnpm-workspace.yaml` 读取 `patchedDependencies`，因此官方给 node-pty 的
+> spawn-helper 路径补丁在 Termux 上**不会自动应用**——实测也不需要：安卓构建只产出
+> `pty.node`，node-pty 走 forkpty 路径，没装 `spawn-helper` 也能正常开 PTY
+> （本分支已实测 spawn 通）。
 
 ### 3.3 ripgrep 桥接（glob/grep 工具）
 
@@ -183,11 +184,15 @@ cp -r node_modules/@img/sharp-wasm32 <仓库>/node_modules/@img/
 cp -r node_modules/@emnapi node_modules/tslib <仓库>/node_modules/   # 若缺
 ```
 
-### 3.5 模块加载器（--expose-internals）
+### 3.5 模块加载器（--expose-internals 回退）
 
-harness 的插件加载器需要访问 Node 内部模块解析器，依赖
-`node-addon-require-builtin`（无 android 预编译）。Node 自带
-`--expose-internals` 可提供同样能力，**运行时必须携带该参数**（见 §5）。
+0.2 起 harness 通过原生插件 `node-addon-require-builtin` 取 Node 内部模块解析器，
+而该包没有 android-arm64 预编译。本分支在
+`packages/boot/app-boot/src/profile-resolution/resolver.ts` 里加了回退：**加载不到原生
+插件时改走 `require('internal/...')`**，由 Node 自带的 `--expose-internals` 提供同样能力。
+
+因此**运行时必须携带 `--expose-internals`**（见 §5）；缺了它启动会报
+`No usable native binding found for node-addon-require-builtin-android-arm64`。
 
 ### 3.6 安卓原生沙箱 runner（read-only / workspace-write）
 
@@ -212,12 +217,27 @@ bash docs/termux/sandbox/install.sh          # 编译并接线到 web profile
 ## 4. 构建
 
 ```bash
-pnpm run build:lib:host      # 服务端（tsc + tsdown，约 3-5 分钟）
-pnpm run build:lib:client    # 客户端插件包（约 2-4 分钟）
-pnpm --filter @deepseek-ai/dsh-web-frontend run build   # 网页前端（约 10 秒）
+pnpm run build:lib:host      # 服务端（tsc + tsdown，约 5-8 分钟）
+pnpm run build:lib:client    # 客户端插件包（约 3-5 分钟）
+pnpm --filter @deepseek-ai/dsh-web-frontend run build   # 网页前端（约 25 秒）
 ```
 
 构建产物在各自包的 `lib/` 下（已被 .gitignore 排除，不入库）。
+
+> **安卓注意（`build:lib:host` 的最后一步）**：该脚本末尾会调用
+> `pnpm --filter @deepseek-ai/dsh-desktop run bundle` 打包 Electron 桌面端。脚本里的
+> `pnpm` 会解析到 `node_modules/.bin/pnpm`（即 `packageManager` 钉住的 11.x），触发依赖
+> 校验并试图清空 `node_modules`，无 TTY 时报
+> `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`。**安卓不需要桌面端**，把前两步单独跑即可：
+>
+> ```bash
+> node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b tsconfig.host.json
+> ./node_modules/.bin/tsdown --env.DSH_BUILD_FACE host
+> ```
+>
+> 另外：**升级前务必删掉旧构建残留**（`lib/`、`*.tsbuildinfo`，以及已从上游删除、只剩
+> `node_modules` 的空包目录）。否则 tsdown 会把这些空目录当工作区成员，`readPackageJson`
+> 向上继承到根包，报 `[@deepseek-ai/dsh-root] Cannot find entry`。
 
 ---
 
@@ -356,7 +376,7 @@ echo "OPENAI_API_KEY=sk-xxxx" >> .env
 echo "OPENROUTER_API_KEY=sk-xxxx" >> .env
 ```
 
-### 5.6 插件与插件市场（可选）
+### 5.6 插件管理（可选）
 
 harness 的插件装在 web profile 里（`~/.dsh/profiles/web`），装完**重启 dsh web** 生效：
 
@@ -369,21 +389,21 @@ node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-chat
 node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-mermaid-render # 对话内 Mermaid 图表渲染（离线引擎）
 ```
 
-> 已装插件可在 **设置 → 插件** 查看/启停；插件市场内可直接搜索更多社区插件
-> （官方生态站点 dsh-plugin.org）。注意插件由第三方维护，安装前请自行确认来源可信。
+### 5.7 让 AI 自己管理插件（0.2 原生）
 
-### 5.7 让 AI 自己管理插件（可选）
-
-本分支新增了 `plugin-market` 工具：agent 可以直接**搜索 / 查看 / 安装 / 卸载**插件，
-不用你手动敲命令。直接在对话里说：
+0.2 官方已内置 `plugin_manager` 工具（`packages/boot/plugin-manager/src/tools.ts`），
+agent 可以直接**列出 / 启停 / 安装 / 卸载**插件与 bundle，无需手动敲 CLI。直接说：
 
 ```text
-帮我搜一下语音相关的插件
-帮我装 dsh-chatvoice
 看看现在装了哪些插件
+帮我装 dsh-chatvoice
 ```
 
-工具内部复用 `dsh plugin --profile web` 命令，安装/卸载后需要重启 dsh web 生效。
+该工具每次调用都需要 danger-full-access 或逐次审批；变更按 profile 生效，装完重启 dsh web。
+
+> 0.2 会校验插件的 peerDependencies。本机原有两个旧插件（`dshmarket@1.38.0`、
+> `@dhicoc/dsh-reverse-skill@1.0.5`）因版本区间不匹配 0.2 被**自动跳过**（日志会提示），
+> 需要时用 `dsh plugin allow-version` 显式豁免或升级插件。
 
 ---
 
@@ -394,15 +414,21 @@ node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w dsh-merm
 | 文件 | 改动 | 原因 |
 | --- | --- | --- |
 | `packages/session/session-persistence-jsonl/src/index.ts` | 原子发布 `link()` 失败且为 EACCES/EPERM 时回退 `rename()` | Android f2fs 拒绝硬链接；保留官方 EEXIST 去重语义 |
-| `packages/attachment/attachment-local/src/store.ts` | 同上 | 同上 |
+| `packages/attachment/attachment-local/src/store.ts` | 同上；另在目录 fsync 打不开句柄时跳过 | 同上；且 `/`、`/data`、`/data/data` 对非特权应用不可读 |
 | `packages/subprocess/subprocess-local/src/process-inspector.ts` | `android` 视同 `linux` | Android 无独立进程表实现，`process.platform === 'android'` 会导致终端检测报错 |
-| `packages/client/ui-layout/src/client/AppFrame.tsx` / `.module.css` | 手机端抽屉式侧栏/详情面板、悬浮菜单按钮、显式 grid-column | 桌面三栏布局在窄屏"挤"，按官网模式改抽屉 |
-| `packages/client/ui-conversation/.../skeleton/ConversationRoot.tsx` / `.module.css` | 会话标题在手机端避让菜单按钮 | 标题被悬浮按钮遮挡 |
-| `packages/client/ui-chat/.../chat/StatsLine.module.css` | 手机端统计行换行显示 | 缓存命中率等被省略号截断（新版已移到 ui-chat 包） |
+| `packages/boot/app-boot/src/profile-resolution/resolver.ts` | 原生插件 `node-addon-require-builtin` 加载失败时回退 `require('internal/...')` | 该插件无 android-arm64 预编译；回退由 `--expose-internals` 提供同样能力（见 §3.5） |
+| `packages/client/ui-layout/src/client/AppFrame.tsx` / `.module.css` | 手机端抽屉式侧栏/详情面板、悬浮菜单按钮、显式 grid-column | 桌面三栏布局在窄屏“挤”，按官网模式改抽屉。0.2 右栏类名为 `.rightbarCol` |
+| `packages/client/ui-conversation/.../skeleton/ConversationMainPanel.tsx` / `ConversationRoot.module.css` | 会话标题在手机端避让菜单按钮 | 标题被悬浮按钮遮挡。0.2 把骨架拆到了 `ConversationMainPanel` |
 | `packages/client/ui-conversation/.../input/editor/keymap.ts` | 触屏设备上普通回车=换行，Ctrl/Cmd+Enter=发送 | 安卓输入法回车误触发发送 |
-| `packages/client/connection/src/browser-auth.ts` | loopback 来源跳过浏览器会话 token 鉴权 | 恢复"直接打开 127.0.0.1:3080"的老体验；非 loopback（trusted-host）仍需 token |
-| `packages/preset/agent-presets/src/index.ts` | 旧预设名 `code` 作为 `ptc` 的兼容别名 | 官方在 0.1.1+ 把 `code` 改名为 `ptc`，老会话/老 settings 仍存 `code`，直接升级会 resume 失败 |
-| `packages/extensions/tool-plugin-market/` | 新增 `plugin-market` 工具（search/list/info/install/remove） | 让 agent 自己搜索、安装、卸载插件，无需手动敲 CLI |
+| `packages/client/connection/src/browser-auth.ts` | loopback 来源跳过浏览器会话 token 鉴权 | 恢复“直接打开 127.0.0.1:3080”的老体验；非 loopback（trusted-host）仍需 token |
+| `scripts/install-lefthook.mjs` | Android 上跳过 git hooks 安装 | lefthook 无 android-arm64 二进制，否则 `pnpm install` 整体失败 |
+| `docs/termux/**`、`README.md` | Termux 安装/构建/运行/沙箱文档与 fork 声明 | 本分支的使用入口 |
+
+**0.2 升级后已不再需要的旧适配**（上游已自带或该文件已删除）：
+
+- `agent-presets` 的 `code` → `ptc` 兼容别名：0.2 已原生完成改名。
+- `ui-chat` 的 `StatsLine` 手机端换行：该文件在 0.2 已被删除，统计行改为官方实现。
+- 自建 `tool-plugin-market` 扩展：0.2 官方 `plugin_manager` 工具已覆盖同等能力。
 | `docs/termux/README.md` | 本文档 | 适配说明 |
 | `docs/termux/setup-termux.sh` | 一键环境配置脚本 | 自动完成安装/编译/构建 |
 | `docs/termux/koffi-android.patch` | koffi bionic 编译补丁 | 见 §3.1 |

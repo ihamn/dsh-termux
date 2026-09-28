@@ -761,9 +761,17 @@ async function main() {
   }
 }
 
-try {
-  await main()
-} catch (error) {
-  console.error(`[install-lefthook] ${error instanceof Error ? error.message : String(error)}`)
-  process.exitCode = 1
+if (process.platform === 'android') {
+  /* Termux/Android: lefthook publishes no android-arm64 platform binary, so its
+     shim cannot resolve an executable and the installer would fail the whole
+     install. Git hooks are a desktop-dev convenience, not needed on-device;
+     skip installation here instead of failing. */
+  console.warn('[install-lefthook] Android/Termux: no lefthook binary; skipping git hooks.')
+} else {
+  try {
+    await main()
+  } catch (error) {
+    console.error(`[install-lefthook] ${error instanceof Error ? error.message : String(error)}`)
+    process.exitCode = 1
+  }
 }

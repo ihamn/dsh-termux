@@ -610,20 +610,40 @@ class ResolutionRouter {
   }
 }
 
-function internalModules(): InternalModules {
+/**
+ * Resolve one Node-internal module id.
+ *
+ * Desktop and server builds load the native `node-addon-require-builtin`
+ * companion. That package publishes no android-arm64 prebuild, so a Termux
+ * runtime started with `--expose-internals` resolves `internal/*` through the
+ * ordinary CommonJS require instead. Both paths expose the same interfaces
+ * validated by {@link internalModules}.
+ * @returns a resolver for `internal/*` module ids.
+ */
+function builtinRequire(): (moduleId: string) => unknown {
   const require = createRequire(import.meta.url)
-  const addon = require('node-addon-require-builtin') as { requireBuiltin(moduleId: string): unknown }
-  const esmModule = addon.requireBuiltin('internal/modules/esm/loader') as {
+  try {
+    const addon = require('node-addon-require-builtin') as { requireBuiltin(moduleId: string): unknown }
+    return moduleId => addon.requireBuiltin(moduleId)
+  } catch {
+    /* v8 ignore next -- exercised only on hosts without the native companion (Android/Termux). */
+    return moduleId => require(moduleId) as unknown
+  }
+}
+
+function internalModules(): InternalModules {
+  const requireBuiltin = builtinRequire()
+  const esmModule = requireBuiltin('internal/modules/esm/loader') as {
     getOrInitializeCascadedLoader(): ModuleLoaderV1 | ModuleLoaderV2
   }
-  const cjsModule = addon.requireBuiltin('internal/modules/cjs/loader') as { Module: CommonJsModule }
-  const cjsHelpers = addon.requireBuiltin('internal/modules/helpers') as {
+  const cjsModule = requireBuiltin('internal/modules/cjs/loader') as { Module: CommonJsModule }
+  const cjsHelpers = requireBuiltin('internal/modules/helpers') as {
     getCjsConditions(): ReadonlySet<string>
   }
-  const esmUtils = addon.requireBuiltin('internal/modules/esm/utils') as {
+  const esmUtils = requireBuiltin('internal/modules/esm/utils') as {
     getDefaultConditions(): readonly string[]
   }
-  const esmResolve = addon.requireBuiltin('internal/modules/esm/resolve') as {
+  const esmResolve = requireBuiltin('internal/modules/esm/resolve') as {
     defaultResolve(
       specifier: string,
       context: { parentURL?: string; conditions?: readonly string[] },
