@@ -1,5 +1,13 @@
 # DeepSeek Harness
 
+> **Termux 社区适配版(fork)** — 本仓库是社区适配分支,不是 DeepSeek 官方项目。
+> 基于上游 `0.2.0-rc.1`,面向 **Termux / Android(aarch64)** 增加移动端网页界面适配与
+> Android 兼容性修复,与 DeepSeek 官方无任何关联、未获其授权或背书;
+> "DeepSeek"、"DeepSeek Harness" 等名称与商标归其各自所有者所有。
+>
+> 📖 安装与使用指南:[docs/termux/README.md](docs/termux/README.md)
+> 一键配置:`bash docs/termux/setup-termux.sh`
+
 English | [中文](README.zh.md)
 
 DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).

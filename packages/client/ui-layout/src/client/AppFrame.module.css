@@ -61,6 +61,7 @@
 }
 
 .sidebarCol {
+  grid-column: 1;
   min-width: 0;
   overflow: hidden;
   background: var(--dsw-specific-sidebar-fill);
@@ -68,6 +69,7 @@
 }
 
 .centerCol {
+  grid-column: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -269,6 +271,7 @@
  * where it is. The occupant draws its own left border.
  */
 .rightbarCol {
+  grid-column: 3;
   position: relative;
   min-width: 0;
   overflow: visible;
@@ -283,4 +286,91 @@
 
 .overlayLayer > * {
   pointer-events: auto;
+}
+
+/* Termux / mobile adaptation (DeepSeek-web-style drawer): under 768px the
+   conversation takes the whole frame — collapse the sidebar rail and any
+   details track so the center column is truly full-width. The sidebar opens
+   as an overlay drawer and the details panel slides in from the right.
+   Explicit grid-column (above) keeps the center in track 2 no matter what
+   happens to the sidebar track — never re-flow the columns (white screen). */
+@media (max-width: 768px) {
+  .frame {
+    grid-template-columns: 0 minmax(0, 1fr) 0 !important;
+  }
+
+  .handle {
+    display: none;
+  }
+
+  /* DeepSeek-web-style mobile: full-width conversation with a floating menu
+     button (top-left); the sidebar opens as an overlay drawer. */
+  .menuButton {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 13;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--dsw-alias-border-l2);
+    background: var(--dsw-alias-button-floating-fill);
+    color: var(--dsw-alias-text-strong);
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  .frame[data-mobile-sidebar-open] .sidebarCol {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 280px;
+    z-index: 15;
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .mobileBackdrop {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 14;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .frame[data-mobile-sidebar-open] .mobileBackdrop {
+    display: block;
+  }
+
+  .rightbarCol {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: min(85vw, 360px);
+    z-index: 15;
+    transform: translateX(100%);
+    transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+  }
+
+  .frame[data-mobile-details-open] .rightbarCol {
+    transform: translateX(0);
+    border-left: 1px solid var(--dsw-alias-border-l2);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .mobileDetailsBackdrop {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 14;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .frame[data-mobile-details-open] .mobileDetailsBackdrop {
+    display: block;
+  }
 }

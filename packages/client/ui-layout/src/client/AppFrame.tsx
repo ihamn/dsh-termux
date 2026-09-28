@@ -158,6 +158,9 @@ export function AppFrame({
   }, [actions])
 
   const narrow = viewport < SIDEBAR_AUTO_COLLAPSE
+  // Termux / Android: at phone widths the conversation takes the whole frame and
+  // the sidebar and right panel become overlay drawers (AppFrame.module.css).
+  const mobile = viewport <= 768
   const sidebarCollapsed = narrow ? !layoutInfo.narrowExpanded : layoutInfo.sidebar === 0
   const sidebarPreference = sidebarCollapsed
     ? 0
@@ -172,6 +175,7 @@ export function AppFrame({
   // include that space before the occupant's first shown report arrives.
   const normal = computeColumns(viewport, !layoutInfo.rightbarShown && narrow ? 0 : sidebarPreference, rightbarPreference, collapsedWidth)
   const cols = computeColumns(viewport, sidebarPreference, layoutInfo.rightbarTrack ? rightbarPreference : 0, collapsedWidth)
+  const mobileDetailsOpen = mobile && cols.rightbar > 0
   const colsRef = useRef(cols)
   colsRef.current = cols
   const rightbarWidth = useRef(normal.rightbar)
@@ -270,6 +274,9 @@ export function AppFrame({
       data-rightbar-fullscreen={layoutInfo.rightbarFullscreen || undefined}
       data-rightbar-instant={layoutInfo.rightbarInstant || undefined}
       data-dragging={dragging || undefined}
+      data-mobile-drawer={mobile || undefined}
+      data-mobile-sidebar-open={(mobile && !sidebarCollapsed) || undefined}
+      data-mobile-details-open={mobileDetailsOpen || undefined}
       data-animating={animating > 0 || undefined}
     >
       <DocumentTitle
@@ -289,6 +296,11 @@ export function AppFrame({
       <div className={css.overlayLayer} data-shell-overlay>
         {overlays}
       </div>
+      {mobile && <div className={css.mobileBackdrop} onClick={() => { actions.toggleSidebar() }} aria-hidden />}
+      {mobile && <div className={css.mobileDetailsBackdrop} onClick={() => { actions.closeRightbar() }} aria-hidden />}
+      {mobile && (
+        <button type="button" className={css.menuButton} onClick={() => { actions.toggleSidebar() }} aria-label="打开侧栏">☰</button>
+      )}
       {leadingMounted && (
         <div className={css.leadingSeat} data-shell-leading>
           {leading}

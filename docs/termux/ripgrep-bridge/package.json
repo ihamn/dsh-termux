@@ -1,0 +1,7 @@
+{
+  "name": "@vscode/ripgrep",
+  "version": "0.0.0-termux",
+  "type": "module",
+  "main": "index.js",
+  "private": true
+}

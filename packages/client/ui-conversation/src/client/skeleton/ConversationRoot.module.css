@@ -12,6 +12,20 @@
    meet at the column edge. The rows add up to it — 10px top inset, the 30px
    title row, the tab strip's 10px margin, a 16px tab line, and its 9px bottom
    inset — so no row below may grow past its figure. */
+
+/* Seat for the session header row; on phones it clears the floating menu
+   button (top-left) so the conversation name is not covered. */
+.headerSeat {
+  flex: none;
+}
+
+@media (max-width: 768px) {
+  .headerSeat {
+    padding-left: 56px;
+    padding-right: 8px;
+  }
+}
+
 .header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -2,7 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { constants, createReadStream } from 'node:fs'
-import { chmod, link, mkdir, open, readFile, unlink } from 'node:fs/promises'
+import { chmod, link, mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import { dirname, join, parse, resolve } from 'node:path'
 import {
   AttachmentError,
@@ -133,7 +133,16 @@ async function syncDirectory(path: string): Promise<void> {
   /* v8 ignore next -- Windows cannot open directory handles; NTFS metadata journaling owns entry durability there. */
   if (process.platform === 'win32') return
   /* v8 ignore start -- Windows cannot exercise directory fsync; POSIX behavior tests enforce this peer. */
-  const handle = await open(path, constants.O_RDONLY)
+  let handle
+  try {
+    handle = await open(path, constants.O_RDONLY)
+  } catch {
+    /* Android/Termux: /, /data and /data/data are not readable by unprivileged apps, so an
+     * ancestor above the app-private tree cannot be opened for fsync. Durability there belongs
+     * to the platform; skipping it keeps image attachments working instead of failing the whole
+     * read. Desktop POSIX behavior is unchanged. */
+    return
+  }
   try {
     await handle.sync()
   } finally {
@@ -355,18 +364,29 @@ async function publishStagedObject(
   const parent = dirname(target)
   try {
     await ensureDurableDirectory(parent, staged.boundary)
+    let moved = false
     try {
       await link(staged.path, target)
     } catch (error) {
       /* v8 ignore next -- Private same-filesystem directories make EEXIST the only recoverable link race. */
-      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
-      if (await digestFile(target) !== staged.sha256) {
-        throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+      if (!(error instanceof Error && 'code' in error)) throw error
+      if (error.code === 'EEXIST') {
+        if (await digestFile(target) !== staged.sha256) {
+          throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+        }
+      } else if (error.code === 'EACCES' || error.code === 'EPERM') {
+        // Android/Termux denies hardlink creation (f2fs + SELinux); rename is
+        // atomic here and the staging path is consumed by the move.
+        await rename(staged.path, target)
+        moved = true
+      } else {
+        throw error
       }
     }
     // Windows shares the read-only attribute across hard links and refuses to
-    // unlink either name once it is set, so discard the staging name first.
-    await unlink(staged.path)
+    // unlink either name once it is set, so discard the staging name first
+    // (skipped when Android's rename() already consumed it).
+    if (!moved) await unlink(staged.path)
     // The target remains the sole link for a new object; this also restores
     // read-only mode when the deduplication path observes an existing object.
     await chmod(target, 0o400)

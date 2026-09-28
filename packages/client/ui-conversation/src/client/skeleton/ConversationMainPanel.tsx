@@ -42,7 +42,9 @@ export function ConversationMainPanel(props: ConversationSlotProps) {
 
   return (
     <div className={css.root} data-phase={phase}>
-      {renderSlot('conversation.header', {})}
+      <div className={css.headerSeat}>
+        {renderSlot('conversation.header', {})}
+      </div>
       {renderFactorySlot('conversation.content', {
         variant: 'main',
         phase,
