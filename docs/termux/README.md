@@ -401,9 +401,18 @@ agent 可以直接**列出 / 启停 / 安装 / 卸载**插件与 bundle，无需
 
 该工具每次调用都需要 danger-full-access 或逐次审批；变更按 profile 生效，装完重启 dsh web。
 
-> 0.2 会校验插件的 peerDependencies。本机原有两个旧插件（`dshmarket@1.38.0`、
-> `@dhicoc/dsh-reverse-skill@1.0.5`）因版本区间不匹配 0.2 被**自动跳过**（日志会提示），
-> 需要时用 `dsh plugin allow-version` 显式豁免或升级插件。
+> 0.2 会校验插件的 peerDependencies，不匹配的插件**留在原地但启动时被拒绝**（日志提示
+> `is incompatible with dsh ...`）。两条处理路径：
+>
+> 1. **升级插件**。例如 `dshmarket` 1.38.0 拒绝 0.2，1.66.5 已声明支持：
+>    `node --expose-internals apps/cli/lib/bin.js plugin --profile web add -w 'dshmarket@^1.66.5'`
+>    （`dsh plugin` 是 pnpm 透传，改 profile 依赖必须带 `-w`。）
+> 2. **精确版本豁免**。上游没有新版时，把精确的 `包名@版本 -> [DSH 版本]` 写进 profile 的
+>    `~/.dsh/profiles/web/compatibility.json`（也可由 agent 的 `plugin_manager` 工具或网页端插件
+>    管理器代写），例如 `{"@dhicoc/dsh-reverse-skill@1.0.5": ["0.2.0-rc.1"]}`。
+>    豁免会跳过兼容性校验，官方警告“可能崩溃或丢数据”——先确认插件只用了仍然存在的 API
+>    （例：`@dhicoc/dsh-reverse-skill` 只依赖 `ctx.skills.registerProvider`，0.2 签名未变）。
+>    撤销＝删掉该 JSON 里的对应项后重启 dsh web。
 
 ---
 
